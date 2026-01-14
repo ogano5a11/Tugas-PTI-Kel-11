@@ -1,8 +1,8 @@
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useState, useContext, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { AuthContext } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, Clock, XCircle, Loader } from 'lucide-react';
+import { CheckCircle, Loader, XCircle, MessageSquare, Send } from 'lucide-react';
 
 interface Booking {
   id: string;
@@ -13,51 +13,80 @@ interface Booking {
   total_price: number;
 }
 
+interface Message {
+  id: string;
+  content: string;
+  role: 'customer' | 'partner';
+  created_at: string;
+}
+
 export default function Dashboard() {
   const { user } = useContext(AuthContext) || {};
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [reply, setReply] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
   const navigate = useNavigate();
 
   useEffect(() => {
     if (user && user.role !== 'partner') {
       alert("Halaman ini khusus Mitra!");
       navigate('/');
+      return;
     }
 
     fetchBookings();
+    fetchMessages();
+
+    const channel = supabase
+      .channel('public:messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        setMessages((prev) => [...prev, payload.new as Message]);
+        scrollToBottom();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [user]);
 
   const fetchBookings = async () => {
     try {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('*')
-        .order('created_at', { ascending: false });
-
+      const { data, error } = await supabase.from('bookings').select('*').order('created_at', { ascending: false });
       if (error) throw error;
       setBookings(data || []);
-    } catch (error) {
-      console.error("Error fetch bookings:", error);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
-  const updateStatus = async (id: string, newStatus: string) => {
-    try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status: newStatus })
-        .eq('id', id);
+  const fetchMessages = async () => {
+    const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
+    if (data) setMessages(data as Message[]);
+    scrollToBottom();
+  };
 
-      if (error) throw error;
-      
-      fetchBookings(); 
-      alert(`Status berhasil diubah menjadi ${newStatus}`);
-    } catch (error: any) {
-      alert("Gagal update status: " + error.message);
-    }
+  const scrollToBottom = () => {
+    setTimeout(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
+  };
+
+  const sendReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reply.trim()) return;
+
+    const { error } = await supabase.from('messages').insert([{
+      sender_id: user?.id,
+      content: reply,
+      role: 'partner'
+    }]);
+
+    if (!error) setReply('');
+  };
+  // -------------------
+
+  const updateStatus = async (id: string, newStatus: string) => {
+    const { error } = await supabase.from('bookings').update({ status: newStatus }).eq('id', id);
+    if (!error) { fetchBookings(); alert(`Status diubah: ${newStatus}`); }
   };
 
   const getStatusColor = (status: string) => {
@@ -69,75 +98,105 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) return <div className="p-8 text-center">Loading Dashboard...</div>;
+  if (loading) return <div className="p-8 text-center">Loading...</div>;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Dashboard Mitra</h1>
-        <div className="bg-green-50 px-4 py-2 rounded-lg text-green-700 font-medium">
-          Halo, {user?.name}
-        </div>
+        <div className="bg-green-50 px-4 py-2 rounded-lg text-green-700 font-medium">Halo, {user?.name}</div>
       </div>
 
-      <div className="bg-white shadow overflow-hidden rounded-lg border border-gray-200">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Layanan</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pelanggan</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {bookings.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-4 text-center text-gray-500">Belum ada pesanan masuk.</td>
-              </tr>
-            ) : (
-              bookings.map((booking) => (
-                <tr key={booking.id}>
-                  <td className="px-6 py-4 whitespace-nowrap font-medium">{booking.service_name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{booking.customer_name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{booking.booking_date}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(booking.status)}`}>
-                      {booking.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                    {booking.status === 'Pending' && (
-                      <button 
-                        onClick={() => updateStatus(booking.id, 'Diproses')}
-                        className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
-                      >
-                        <Loader size={16} /> Proses
-                      </button>
-                    )}
-                    {booking.status === 'Diproses' && (
-                      <button 
-                        onClick={() => updateStatus(booking.id, 'Selesai')}
-                        className="text-green-600 hover:text-green-900 flex items-center gap-1"
-                      >
-                        <CheckCircle size={16} /> Selesai
-                      </button>
-                    )}
-                     {(booking.status !== 'Selesai' && booking.status !== 'Dibatalkan') && (
-                      <button 
-                        onClick={() => updateStatus(booking.id, 'Dibatalkan')}
-                        className="text-red-600 hover:text-red-900 flex items-center gap-1 ml-2"
-                      >
-                        <XCircle size={16} /> Batal
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+      <div className="grid lg:grid-cols-3 gap-8">
+        
+        <div className="lg:col-span-2">
+          <div className="bg-white shadow rounded-lg border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <h2 className="font-bold text-gray-700">Daftar Pesanan Masuk</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Layanan</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {bookings.map((booking) => (
+                    <tr key={booking.id}>
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-gray-900">{booking.service_name}</div>
+                        <div className="text-sm text-gray-500">{booking.customer_name}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 text-xs leading-5 font-semibold rounded-full ${getStatusColor(booking.status)}`}>
+                          {booking.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 space-x-2">
+                        {booking.status === 'Pending' && (
+                          <button onClick={() => updateStatus(booking.id, 'Diproses')} className="text-blue-600 hover:text-blue-900 font-bold text-xs border border-blue-200 px-2 py-1 rounded">Proses</button>
+                        )}
+                        {booking.status === 'Diproses' && (
+                          <button onClick={() => updateStatus(booking.id, 'Selesai')} className="text-green-600 hover:text-green-900 font-bold text-xs border border-green-200 px-2 py-1 rounded">Selesai</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div className="lg:col-span-1">
+          <div className="bg-white shadow rounded-lg border border-gray-200 h-[600px] flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-200 bg-green-600 text-white flex items-center gap-2">
+              <MessageSquare size={20} />
+              <h2 className="font-bold">Live Chat Pelanggan</h2>
+            </div>
+
+            {/* Area Chat */}
+            <div className="flex-1 p-4 overflow-y-auto bg-gray-50 space-y-4">
+              {messages.length === 0 ? (
+                <p className="text-center text-gray-400 text-sm">Belum ada pesan.</p>
+              ) : (
+                messages.map((msg) => (
+                  <div key={msg.id} className={`flex ${msg.role === 'partner' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm shadow-sm ${
+                      msg.role === 'partner' 
+                        ? 'bg-blue-600 text-white rounded-tr-none' 
+                        : 'bg-white text-gray-800 border border-gray-200 rounded-tl-none'
+                    }`}>
+                      <p className="text-xs opacity-70 mb-1">{msg.role === 'partner' ? 'Anda' : 'Pelanggan'}</p>
+                      {msg.content}
+                    </div>
+                  </div>
+                ))
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Input Reply */}
+            <form onSubmit={sendReply} className="p-3 border-t bg-white">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  placeholder="Balas pesan..."
+                  className="flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                />
+                <button type="submit" disabled={!reply.trim()} className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700">
+                  <Send size={18} />
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
       </div>
     </div>
   );
