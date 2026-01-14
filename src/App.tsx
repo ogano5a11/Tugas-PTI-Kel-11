@@ -10,6 +10,7 @@ import Booking from './pages/Booking';
 import ComingSoon from './pages/ComingSoon';
 import About from './pages/About';
 import Bantuan from './pages/Bantuan';
+import Dashboard from './pages/Dashboard';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/coming-soon" element={<ComingSoon />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route
             path="*"
             element={

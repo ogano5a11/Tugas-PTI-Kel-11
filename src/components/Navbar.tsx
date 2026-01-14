@@ -1,14 +1,15 @@
 import { useContext, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Menu, X, LogOut, User } from 'lucide-react';
+import { Menu, X, LogOut, User, LayoutDashboard } from 'lucide-react';
 import { AuthContext } from '../contexts/AuthContext';
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const authContext = useContext(AuthContext);
+  const context = useContext(AuthContext); 
+  const user = context?.user;
+  const signOut = context?.signOut;
+  
   const navigate = useNavigate();
-  const user = authContext?.user;
-  const signOut = authContext?.signOut;
 
   const handleLogout = async () => {
     if (signOut) {
@@ -26,7 +27,7 @@ export default function Navbar() {
             <h1 className="text-2xl font-bold text-gray-900">Beres.in</h1>
           </Link>
 
-          {/* Menu Desktop */}
+          {/* === MENU DESKTOP === */}
           <div className="hidden md:flex items-center space-x-8">
             <Link to="/" className="text-gray-700 hover:text-green-600 transition-colors">
               Home
@@ -40,6 +41,17 @@ export default function Navbar() {
             <Link to="/bantuan" className="text-gray-700 hover:text-green-600 transition-colors">
               Bantuan
             </Link>
+
+            {/* Tombol Dashboard Mitra */}
+            {user?.role === 'partner' && (
+              <Link 
+                to="/dashboard" 
+                className="flex items-center gap-1 text-green-700 hover:text-green-800 font-medium transition-colors border border-green-600 px-3 py-1 rounded-full bg-green-50"
+              >
+                <LayoutDashboard size={16} />
+                Dashboard Mitra
+              </Link>
+            )}
 
             {user ? (
               <div className="flex items-center gap-4 pl-4 border-l border-gray-200">
@@ -73,7 +85,7 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Tombol Menu Mobile */}
+          {/* Tombol Hamburger Mobile */}
           <div className="md:hidden">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -85,7 +97,7 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Menu Mobile Dropdown */}
+      {/* === MENU MOBILE (DROPDOWN) === */}
       {isMenuOpen && (
         <div className="md:hidden bg-white border-t border-gray-100 shadow-lg absolute w-full">
           <div className="px-4 pt-2 pb-4 space-y-2">
@@ -101,6 +113,18 @@ export default function Navbar() {
             <Link to="/bantuan" className="block text-gray-700 hover:text-green-600 py-3 border-b border-gray-50">
               Bantuan
             </Link>
+
+            {/* Tombol Dashboard Mitra (Versi Mobile) */}
+            {user?.role === 'partner' && (
+              <Link 
+                to="/dashboard" 
+                className="flex items-center gap-2 text-green-700 font-bold py-3 border-b border-gray-50 bg-green-50 px-2 rounded-lg"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                <LayoutDashboard size={20} />
+                Dashboard Mitra
+              </Link>
+            )}
 
             {user ? (
               <div className="pt-4 space-y-3">

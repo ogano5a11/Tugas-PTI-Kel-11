@@ -12,6 +12,8 @@ export default function Login() {
   const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
   
+  const isLoadingRef = useRef(false);
+  
   const leftRef = useRef(null);
   const formRef = useRef(null);
 
@@ -22,39 +24,56 @@ export default function Login() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     setLoading(true);
+    isLoadingRef.current = true;
     setErrorMsg('');
 
     const timeout = setTimeout(() => {
-        if (loading) {
+        if (isLoadingRef.current) {
+            console.warn("Login timeout triggered");
             setLoading(false);
-            setErrorMsg("Koneksi lambat. Silakan coba lagi.");
+            isLoadingRef.current = false;
+            setErrorMsg("Koneksi ke server lambat atau terputus. Coba refresh halaman.");
         }
     }, 10000);
 
     try {
+      console.log("Mencoba login dengan:", email);
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) throw error;
+
       if (data.session) {
-        clearTimeout(timeout); 
+        console.log("Login sukses, redirecting...");
+        clearTimeout(timeout);
+        setLoading(false);
+        isLoadingRef.current = false; 
         navigate('/');
+      } else {
+        throw new Error("Sesi tidak ditemukan.");
       }
       
     } catch (error: any) {
       clearTimeout(timeout);
-      console.error("Login Error:", error.message);
+      console.error("Login Error Full:", error);
       
       let pesan = error.message;
+      
       if (pesan.includes("Invalid login credentials")) pesan = "Email atau password salah.";
       if (pesan.includes("Email not confirmed")) pesan = "Email belum diverifikasi. Cek inbox Anda.";
+      if (pesan.includes("fetch failed")) pesan = "Gagal menghubungi server. Cek koneksi internet Anda.";
       
       setErrorMsg(pesan);
     } finally {
-      setLoading(false);
+        if (isLoadingRef.current) {
+            setLoading(false);
+            isLoadingRef.current = false;
+        }
     }
   };
 
