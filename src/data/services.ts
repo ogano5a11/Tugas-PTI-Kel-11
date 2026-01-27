@@ -37,7 +37,7 @@ export const services: Service[] = [
     price: 85000,
     rating: 4.7,
     reviews: 178,
-    image: 'https://images.pexels.com/photos/3945683/pexels-photo-3945683.jpeg?auto=compress&cs=tinysrgb&w=400',
+    image: 'https://vistasolutions.co.id/wp-content/uploads/2025/02/Jasa-Pasang-AC-.png',
     description: 'Perbaikan dan perawatan AC profesional dengan garansi',
     partner: {
       id: 'p2',
@@ -137,12 +137,12 @@ export const services: Service[] = [
   },
   {
     id: '7',
-    name: 'Perbaikan Listrik Rumah',
+    name: 'Jasa Bangun Rumah & Renovasi',
     category: 'perbaikan',
     price: 75000,
     rating: 4.9,
     reviews: 189,
-    image: 'https://images.pexels.com/photos/3962286/pexels-photo-3962286.jpeg?auto=compress&cs=tinysrgb&w=400',
+    image: 'https://www.benahin.id/jurnal/wp-content/uploads/sites/2/2025/04/63.Jasa-Bangun-Rumah-Jabodetabek-Solusi-Pembangunan-Rumah-yang-Efisien-dan-Berkualitas-1.jpg',
     description: 'Perbaikan sistem listrik dengan standar keselamatan internasional',
     partner: {
       id: 'p7',
@@ -163,7 +163,7 @@ export const services: Service[] = [
     price: 120000,
     rating: 4.8,
     reviews: 78,
-    image: 'https://images.pexels.com/photos/3857369/pexels-photo-3857369.jpeg?auto=compress&cs=tinysrgb&w=400',
+    image: 'https://gemilang.co.id/wp-content/uploads/2025/06/jasa-kebersihan-taman-gemilang-rotated-e1749104813785.jpg',
     description: 'Desain dan pengerjaan taman rumah dengan konsep modern',
     partner: {
       id: 'p8',

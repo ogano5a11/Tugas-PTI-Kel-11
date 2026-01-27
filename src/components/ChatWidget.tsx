@@ -21,7 +21,7 @@ export default function ChatWidget() {
   useEffect(() => {
     let interval: any;
 
-    if (isOpen) {
+    if (isOpen && user) {
       fetchMessages();
       interval = setInterval(() => {
         fetchMessages(false);
@@ -31,13 +31,14 @@ export default function ChatWidget() {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isOpen]);
+  }, [isOpen, user]);
 
-  // FUNGSI FETCH KE PHP
   const fetchMessages = async (showLoading = true) => {
+    if (!user) return;
+
     if (showLoading) setLoading(true);
     try {
-      const res = await fetch('http://localhost/beres-api/get_messages.php');
+      const res = await fetch(`http://localhost/beres-api/get_messages.php?user_id=${user.id}`);
       const data = await res.json();
       
       if (data.success) {
@@ -70,7 +71,6 @@ export default function ChatWidget() {
     }
 
     try {
-      // KIRIM KE PHP
       const response = await fetch('http://localhost/beres-api/send_messages.php', {
         method: 'POST',
         headers: {
@@ -96,6 +96,8 @@ export default function ChatWidget() {
       console.error("Gagal kirim pesan:", error);
     }
   };
+
+  if (!user) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end">

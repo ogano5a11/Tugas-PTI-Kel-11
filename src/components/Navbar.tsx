@@ -42,6 +42,15 @@ export default function Navbar() {
               Bantuan
             </Link>
 
+            {user?.role === 'customer' && (
+              <Link 
+                to="/pesanan-saya" 
+                className="text-gray-700 hover:text-green-600 transition-colors font-medium"
+              >
+                Pesanan Saya
+              </Link>
+            )}
+
             {/* Tombol Dashboard Mitra */}
             {user?.role === 'admin' && (
               <Link 
@@ -113,6 +122,16 @@ export default function Navbar() {
             <Link to="/bantuan" className="block text-gray-700 hover:text-green-600 py-3 border-b border-gray-50">
               Bantuan
             </Link>
+
+            {user?.role === 'customer' && (
+              <Link 
+                to="/pesanan-saya" 
+                className="block text-gray-700 hover:text-green-600 py-3 border-b border-gray-50 font-medium"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Pesanan Saya
+              </Link>
+            )}
 
             {/* Tombol Dashboard Mitra (Versi Mobile) */}
             {user?.role === 'admin' && (

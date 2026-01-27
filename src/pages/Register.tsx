@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { User, Mail, Lock, Phone, Eye, EyeOff } from 'lucide-react';
+import { User, Mail, Lock, Phone, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { slideInLeft, slideInRight } from '../utils/animations';
 
 export default function Register() {
@@ -15,7 +15,9 @@ export default function Register() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState<'customer' | 'admin'>('customer');
-  
+
+  const [errorMsg, setErrorMsg] = useState('');
+
   const navigate = useNavigate();
   const leftRef = useRef(null);
   const formRef = useRef(null);
@@ -27,9 +29,10 @@ export default function Register() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setErrorMsg('');
+
     if (formData.password !== formData.confirmPassword) {
-      alert('Password dan Konfirmasi Password tidak cocok!');
+      setErrorMsg('Password dan Konfirmasi Password tidak cocok!');
       return;
     }
 
@@ -62,7 +65,7 @@ export default function Register() {
 
     } catch (error: any) {
       console.error("Register Error:", error);
-      alert(error.message || 'Terjadi kesalahan koneksi ke server.');
+      setErrorMsg(error.message || 'Terjadi kesalahan koneksi ke server.');
     } finally {
       setLoading(false);
     }
@@ -84,6 +87,14 @@ export default function Register() {
         <div ref={formRef} className="bg-white rounded-2xl shadow-lg p-8">
           <h2 className="text-3xl font-bold text-gray-900 mb-2">Daftar</h2>
           <p className="text-gray-600 mb-6">Buat akun baru Anda</p>
+
+          {/* === ERROR ALERT BOX === */}
+          {errorMsg && (
+            <div className="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg flex items-center gap-2 text-sm animate-fade-in">
+                <AlertCircle size={18} />
+                {errorMsg}
+            </div>
+          )}
 
           <div className="flex gap-4 mb-6">
             <button

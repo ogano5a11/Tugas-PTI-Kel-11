@@ -11,6 +11,7 @@ import ComingSoon from './pages/ComingSoon';
 import About from './pages/About';
 import Bantuan from './pages/Bantuan';
 import Dashboard from './pages/Dashboard';
+import MyOrders from './pages/MyOrders';
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/coming-soon" element={<ComingSoon />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/pesanan-saya" element={<MyOrders />} />
           <Route
             path="*"
             element={
