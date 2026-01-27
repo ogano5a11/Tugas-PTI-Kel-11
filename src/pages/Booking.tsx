@@ -1,21 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Calendar, Clock, MapPin, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
 import gsap from 'gsap';
 import { services } from '../data/services';
-import { supabase } from '../lib/supabase';
+import { AuthContext } from '../contexts/AuthContext';
 
 export default function Booking() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const authContext = useContext(AuthContext);
   const pageRef = useRef<HTMLDivElement>(null);
   const leftRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
-  
   const [isBooked, setIsBooked] = useState(false);
   const [loading, setLoading] = useState(false); 
   const [errorMsg, setErrorMsg] = useState('');
-
   const isLoadingRef = useRef(false);
 
   const [formData, setFormData] = useState({
@@ -30,7 +29,6 @@ export default function Booking() {
   const service = services.find((s) => s.id === id);
 
   useEffect(() => {
-    // Animasi Masuk
     if (pageRef.current) gsap.fromTo(pageRef.current, { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4 });
     if (leftRef.current) gsap.fromTo(leftRef.current, { opacity: 0, x: -50 }, { opacity: 1, x: 0, duration: 0.6 });
     if (rightRef.current) gsap.fromTo(rightRef.current, { opacity: 0, x: 50 }, { opacity: 1, x: 0, duration: 0.6 });
@@ -50,49 +48,53 @@ export default function Booking() {
     setLoading(true);
     isLoadingRef.current = true;
     setErrorMsg('');
-
     const timeout = setTimeout(() => {
         if (isLoadingRef.current) {
             console.warn("Booking timeout triggered");
             setLoading(false);
             isLoadingRef.current = false;
-            setErrorMsg("Koneksi lambat. Pesanan mungkin gagal terkirim. Silakan cek koneksi internet Anda.");
+            setErrorMsg("Koneksi lambat. Pesanan mungkin gagal terkirim. Pastikan XAMPP (Apache & MySQL) sudah menyala.");
         }
     }, 10000);
 
     try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      
-      if (authError || !user) {
+      if (!authContext || !authContext.user) {
         clearTimeout(timeout);
-        alert("Sesi habis. Silakan login kembali.");
+        alert("Sesi habis atau Anda belum login. Silakan login kembali.");
         navigate('/login');
         return;
       }
 
+      const currentUser = authContext.user;
       const totalPrice = Math.round(service.price * 1.1);
 
-      console.log("Mengirim data pesanan...");
+      console.log("Mengirim data pesanan ke API PHP...");
 
-      const { error } = await supabase
-        .from('bookings')
-        .insert([
-          {
-            user_id: user.id,
-            service_name: service.name,
-            customer_name: formData.name,
-            customer_phone: formData.phone,
-            booking_date: formData.date,
-            booking_time: formData.time,
-            address: formData.address,
-            total_price: totalPrice,
-            status: 'Pending'
-          }
-        ]);
+      const response = await fetch('http://localhost/beres-api/create_booking.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: currentUser.id,
+          service_name: service.name,
+          customer_name: formData.name,
+          customer_phone: formData.phone,
+          booking_date: formData.date,
+          booking_time: formData.time,
+          address: formData.address,
+          total_price: totalPrice,
+          status: 'Pending'
+        }),
+      });
 
-      if (error) throw error;
+      const result = await response.json();
 
-      console.log("Pesanan sukses!");
+      if (!result.success) {
+        throw new Error(result.message || "Gagal menyimpan pesanan ke database.");
+      }
+
+      console.log("Pesanan sukses disimpan!");
       clearTimeout(timeout);
       setIsBooked(true);
 
@@ -101,9 +103,11 @@ export default function Booking() {
       console.error("Booking Error:", error);
       
       let pesan = error.message;
-      if (pesan.includes("row-level security")) pesan = "Gagal menyimpan: Izin ditolak database (Cek RLS Policy).";
+      if (pesan.includes("Failed to fetch")) {
+          pesan = "Gagal terhubung ke server. Pastikan API PHP (XAMPP) sudah berjalan.";
+      }
       
-      setErrorMsg("Gagal memesan: " + pesan);
+      setErrorMsg(pesan);
     } finally {
       if (isLoadingRef.current) {
         setLoading(false);
@@ -112,6 +116,7 @@ export default function Booking() {
     }
   };
 
+  // --- TAMPILAN SUKSES (BOOKING BERHASIL) ---
   if (isBooked) {
     const orderId = `#BRS-${Date.now().toString().slice(-6)}`;
 
@@ -162,7 +167,13 @@ export default function Booking() {
                 onClick={() => navigate('/dashboard')} 
                 className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors font-medium"
               >
-                Cek Status di Dashboard
+                Cek Status di Dashboard (Khusus Mitra)
+              </button>
+               <button
+                onClick={() => navigate('/')} 
+                className="w-full text-green-600 py-3 rounded-lg hover:bg-green-50 transition-colors font-medium"
+              >
+                Kembali ke Home
               </button>
             </div>
           </div>
@@ -171,7 +182,7 @@ export default function Booking() {
     );
   }
 
-  // --- TAMPILAN FORM ---
+  // --- TAMPILAN FORMULIR BOOKING ---
   return (
     <div ref={pageRef} className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

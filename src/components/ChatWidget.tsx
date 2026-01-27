@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useContext } from 'react';
 import { MessageCircle, X, Send, Loader } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { AuthContext } from '../contexts/AuthContext';
 
 interface Message {
   id: string;
   content: string;
-  role: 'customer' | 'partner';
+  role: 'customer' | 'admin';
   created_at: string;
 }
 
@@ -15,71 +15,83 @@ export default function ChatWidget() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const authContext = useContext(AuthContext);
+  const user = authContext?.user;
 
   useEffect(() => {
+    let interval: any;
+
     if (isOpen) {
       fetchMessages();
-
-      const channel = supabase
-        .channel('public:messages')
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'messages' },
-          (payload) => {
-            const newMsg = payload.new as Message;
-            setMessages((prev) => [...prev, newMsg]);
-            scrollToBottom();
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
+      interval = setInterval(() => {
+        fetchMessages(false);
+      }, 3000);
     }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [isOpen]);
 
-  const fetchMessages = async () => {
-    setLoading(true);
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .order('created_at', { ascending: true });
-    
-    if (data) setMessages(data as Message[]);
-    setLoading(false);
-    scrollToBottom();
+  // FUNGSI FETCH KE PHP
+  const fetchMessages = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
+    try {
+      const res = await fetch('http://localhost/beres-api/get_messages.php');
+      const data = await res.json();
+      
+      if (data.success) {
+        setMessages((prev) => {
+             if (prev.length !== data.data.length) {
+                 setTimeout(scrollToBottom, 100);
+                 return data.data;
+             }
+             return prev;
+        });
+      }
+    } catch (error) {
+      console.error("Gagal ambil pesan:", error);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
   };
 
   const scrollToBottom = () => {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
 
+    if (!user) {
+      alert("Silakan login untuk mengirim pesan.");
+      return;
+    }
+
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        alert("Silakan login untuk mengirim pesan.");
-        return;
+      // KIRIM KE PHP
+      const response = await fetch('http://localhost/beres-api/send_message.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender_id: user.id,
+          content: newMessage,
+          role: 'customer'
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setNewMessage('');
+        fetchMessages(false);
+      } else {
+        alert("Gagal mengirim pesan");
       }
 
-      const { error } = await supabase
-        .from('messages')
-        .insert([
-          {
-            sender_id: user.id,
-            content: newMessage,
-            role: 'customer'
-          }
-        ]);
-
-      if (error) throw error;
-      setNewMessage('');
     } catch (error: any) {
       console.error("Gagal kirim pesan:", error);
     }
@@ -94,7 +106,7 @@ export default function ChatWidget() {
           <div className="bg-green-600 p-4 flex justify-between items-center text-white">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse" />
-              <h3 className="font-semibold">Chat Admin/Mitra</h3>
+              <h3 className="font-semibold">Chat Admin</h3>
             </div>
             <button 
               onClick={() => setIsOpen(false)}

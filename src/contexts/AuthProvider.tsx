@@ -1,95 +1,54 @@
 import { useState, useEffect, ReactNode } from 'react';
-import { supabase } from '../lib/supabase';
-import { AuthContext, User } from './AuthContext';
+import { AuthContext, User, LoginResult } from './AuthContext';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const setSafeUser = async (sessionUser: any) => {
-    try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', sessionUser.id)
-        .single();
-
-      if (profile) {
-        setUser({
-          id: sessionUser.id,
-          email: sessionUser.email!,
-          name: profile.name,
-          role: profile.role
-        });
-      } else {
-        setUser({
-          id: sessionUser.id,
-          email: sessionUser.email!,
-          name: sessionUser.user_metadata?.name || 'Pengguna',
-          role: sessionUser.user_metadata?.role || 'customer'
-        });
+  useEffect(() => {
+    const storedUser = localStorage.getItem('beres_user');
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        console.error("Gagal parse user dari storage", e);
+        localStorage.removeItem('beres_user');
       }
-    } catch (error) {
-      console.error("Error ambil profile:", error);
-    } finally {
-      setLoading(false);
+    }
+    setLoading(false);
+  }, []);
+
+  const login = async (email: string, password: string): Promise<LoginResult> => {
+    try {
+      const res = await fetch('http://localhost/beres-api/login.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        setUser(data.user);
+        localStorage.setItem('beres_user', JSON.stringify(data.user));
+        return { success: true, role: data.user.role };
+      } else {
+        return { success: false, message: data.message || "Login gagal" };
+      }
+    } catch (error: any) {
+      console.error("Login Error:", error);
+      return { success: false, message: "Gagal terhubung ke server (XAMPP)" };
     }
   };
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const checkUser = async () => {
-      try {
-        console.log("Cek sesi Supabase...");
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user && isMounted) {
-          console.log("User ditemukan:", session.user.email);
-          await setSafeUser(session.user);
-        } else if (isMounted) {
-          console.log("Tidak ada user login.");
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error("Gagal cek sesi:", error);
-        if (isMounted) setLoading(false);
-      }
-    };
-
-    checkUser();
-
-    const timeout = setTimeout(() => {
-      if (loading) {
-        console.warn("Loading terlalu lama, memaksa tampilkan aplikasi.");
-        setLoading(false);
-      }
-    }, 2000);
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setLoading(false);
-      } else if (session?.user) {
-        await setSafeUser(session.user);
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timeout);
-      subscription.unsubscribe();
-    };
-  }, []);
-
   const signOut = async () => {
-    await supabase.auth.signOut();
+    localStorage.removeItem('beres_user');
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, setUser, signOut }}>
-      {!loading ? children : <div className="h-screen flex items-center justify-center">Loading...</div>}
+    <AuthContext.Provider value={{ user, loading, setUser, signOut, login }}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 };

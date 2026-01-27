@@ -43,7 +43,7 @@ export default function Navbar() {
             </Link>
 
             {/* Tombol Dashboard Mitra */}
-            {user?.role === 'partner' && (
+            {user?.role === 'admin' && (
               <Link 
                 to="/dashboard" 
                 className="flex items-center gap-1 text-green-700 hover:text-green-800 font-medium transition-colors border border-green-600 px-3 py-1 rounded-full bg-green-50"
@@ -115,7 +115,7 @@ export default function Navbar() {
             </Link>
 
             {/* Tombol Dashboard Mitra (Versi Mobile) */}
-            {user?.role === 'partner' && (
+            {user?.role === 'admin' && (
               <Link 
                 to="/dashboard" 
                 className="flex items-center gap-2 text-green-700 font-bold py-3 border-b border-gray-50 bg-green-50 px-2 rounded-lg"

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { User, Mail, Lock, Phone, Eye, EyeOff } from 'lucide-react';
 import { slideInLeft, slideInRight } from '../utils/animations';
-import { supabase } from '../lib/supabase';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -15,7 +14,7 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [role, setRole] = useState<'customer' | 'partner'>('customer');
+  const [role, setRole] = useState<'customer' | 'admin'>('customer');
   
   const navigate = useNavigate();
   const leftRef = useRef(null);
@@ -30,31 +29,40 @@ export default function Register() {
     e.preventDefault();
     
     if (formData.password !== formData.confirmPassword) {
-      alert('Password tidak cocok');
+      alert('Password dan Konfirmasi Password tidak cocok!');
       return;
     }
 
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            name: formData.name,
-            phone: formData.phone,
-            role: role,
-          },
+      console.log("Mencoba register ke XAMPP...");
+      const response = await fetch('http://localhost/beres-api/register.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          name: formData.name,
+          phone: formData.phone,
+          role: role,
+        }),
       });
 
-      if (error) throw error;
-      alert('Registrasi berhasil! Cek email Anda untuk verifikasi (jika diaktifkan) atau silakan login.');
-      navigate('/login');
+      const data = await response.json();
+
+      if (data.success) {
+        alert('Registrasi Berhasil! Silakan login.');
+        navigate('/login');
+      } else {
+        throw new Error(data.message || 'Gagal mendaftar.');
+      }
 
     } catch (error: any) {
-      alert(error.message || 'Terjadi kesalahan saat registrasi');
+      console.error("Register Error:", error);
+      alert(error.message || 'Terjadi kesalahan koneksi ke server.');
     } finally {
       setLoading(false);
     }
@@ -90,10 +98,10 @@ export default function Register() {
               Pengguna
             </button>
             <button
-              onClick={() => setRole('partner')}
+              onClick={() => setRole('admin')}
               type="button"
               className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
-                role === 'partner'
+                role === 'admin'
                   ? 'bg-green-600 text-white'
                   : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
               }`}

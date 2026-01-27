@@ -1,5 +1,4 @@
 import { useEffect, useState, useContext, useRef } from 'react';
-import { supabase } from '../lib/supabase';
 import { AuthContext } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Loader, XCircle, MessageSquare, Send } from 'lucide-react';
@@ -16,12 +15,14 @@ interface Booking {
 interface Message {
   id: string;
   content: string;
-  role: 'customer' | 'partner';
+  role: 'customer' | 'admin';
   created_at: string;
 }
 
 export default function Dashboard() {
-  const { user } = useContext(AuthContext) || {};
+  const authContext = useContext(AuthContext);
+  const user = authContext?.user;
+  
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -32,61 +33,88 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user && user.role !== 'partner') {
-      alert("Halaman ini khusus Mitra!");
+    if (user && user.role !== 'admin') {
+      alert("Halaman ini khusus Admin!");
       navigate('/');
       return;
     }
 
     fetchBookings();
     fetchMessages();
+    const interval = setInterval(() => {
+        fetchBookings();
+        fetchMessages();
+    }, 3000);
 
-    const channel = supabase
-      .channel('public:messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-        setMessages((prev) => [...prev, payload.new as Message]);
-        scrollToBottom();
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    return () => clearInterval(interval);
   }, [user]);
+
+  // --- API CALLS KE PHP ---
 
   const fetchBookings = async () => {
     try {
-      const { data, error } = await supabase.from('bookings').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      setBookings(data || []);
+      const res = await fetch('http://localhost/beres-api/get_bookings.php');
+      const data = await res.json();
+      if (data.success) {
+          setBookings(data.data);
+      }
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
   const fetchMessages = async () => {
-    const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
-    if (data) setMessages(data as Message[]);
-    scrollToBottom();
+    try {
+        const res = await fetch('http://localhost/beres-api/get_messages.php');
+        const data = await res.json();
+        if (data.success) {
+             setMessages((prev) => {
+                 if (prev.length !== data.data.length) {
+                     scrollToBottom();
+                     return data.data;
+                 }
+                 return prev;
+             });
+        }
+    } catch (e) { console.error(e); }
   };
 
-  const scrollToBottom = () => {
-    setTimeout(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
+  const updateStatus = async (id: string, newStatus: string) => {
+    try {
+        const res = await fetch('http://localhost/beres-api/update_booking.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, status: newStatus })
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert(`Status diubah: ${newStatus}`);
+            fetchBookings();
+        } else {
+            alert("Gagal update status");
+        }
+    } catch (e) { alert("Error koneksi"); }
   };
 
   const sendReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reply.trim()) return;
+    if (!reply.trim() || !user) return;
 
-    const { error } = await supabase.from('messages').insert([{
-      sender_id: user?.id,
-      content: reply,
-      role: 'partner'
-    }]);
-
-    if (!error) setReply('');
+    try {
+        await fetch('http://localhost/beres-api/send_message.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sender_id: user.id,
+                content: reply,
+                role: 'partner'
+            })
+        });
+        setReply('');
+        fetchMessages();
+    } catch (e) { alert("Gagal kirim pesan"); }
   };
-  // -------------------
 
-  const updateStatus = async (id: string, newStatus: string) => {
-    const { error } = await supabase.from('bookings').update({ status: newStatus }).eq('id', id);
-    if (!error) { fetchBookings(); alert(`Status diubah: ${newStatus}`); }
+  const scrollToBottom = () => {
+    setTimeout(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
   };
 
   const getStatusColor = (status: string) => {
@@ -98,7 +126,7 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) return <div className="p-8 text-center">Loading...</div>;
+  if (loading) return <div className="p-8 text-center">Loading Dashboard...</div>;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -109,6 +137,7 @@ export default function Dashboard() {
 
       <div className="grid lg:grid-cols-3 gap-8">
         
+        {/* KOLOM KIRI: DAFTAR PESANAN */}
         <div className="lg:col-span-2">
           <div className="bg-white shadow rounded-lg border border-gray-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
@@ -151,6 +180,7 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* KOLOM KANAN: LIVE CHAT */}
         <div className="lg:col-span-1">
           <div className="bg-white shadow rounded-lg border border-gray-200 h-[600px] flex flex-col">
             <div className="px-6 py-4 border-b border-gray-200 bg-green-600 text-white flex items-center gap-2">
@@ -158,19 +188,18 @@ export default function Dashboard() {
               <h2 className="font-bold">Live Chat Pelanggan</h2>
             </div>
 
-            {/* Area Chat */}
             <div className="flex-1 p-4 overflow-y-auto bg-gray-50 space-y-4">
               {messages.length === 0 ? (
                 <p className="text-center text-gray-400 text-sm">Belum ada pesan.</p>
               ) : (
                 messages.map((msg) => (
-                  <div key={msg.id} className={`flex ${msg.role === 'partner' ? 'justify-end' : 'justify-start'}`}>
+                  <div key={msg.id} className={`flex ${msg.role === 'admin' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm shadow-sm ${
-                      msg.role === 'partner' 
+                      msg.role === 'admin' 
                         ? 'bg-blue-600 text-white rounded-tr-none' 
                         : 'bg-white text-gray-800 border border-gray-200 rounded-tl-none'
                     }`}>
-                      <p className="text-xs opacity-70 mb-1">{msg.role === 'partner' ? 'Anda' : 'Pelanggan'}</p>
+                      <p className="text-xs opacity-70 mb-1">{msg.role === 'admin' ? 'Anda' : 'Pelanggan'}</p>
                       {msg.content}
                     </div>
                   </div>
@@ -179,16 +208,9 @@ export default function Dashboard() {
               <div ref={chatEndRef} />
             </div>
 
-            {/* Input Reply */}
             <form onSubmit={sendReply} className="p-3 border-t bg-white">
               <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={reply}
-                  onChange={(e) => setReply(e.target.value)}
-                  placeholder="Balas pesan..."
-                  className="flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
-                />
+                <input type="text" value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Balas pesan..." className="flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-green-500" />
                 <button type="submit" disabled={!reply.trim()} className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-700">
                   <Send size={18} />
                 </button>
